@@ -50,18 +50,18 @@ async function resaveImportList(url, apiKey, importList) {
 }
 
 // Main function to get and resave all import lists
-async function syncSonarrPlexLists(url, apiKey) {
+async function syncSonarrPlexLists() {
     try {
         const importLists = await getImportLists(sonarrUrl, sonarrAPIKey);
-        console.log(importLists);
+        // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
             if (importList.listType == 'plex') {
                 importList.enableAutomaticAdd = !importList.enableAutomaticAdd
-                await resaveImportList(url, apiKey, importList);
+                await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
                 if (!importList.enableAutomaticAdd) {
                     importList.enableAutomaticAdd = true
-                    await resaveImportList(importList);
+                    await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
                 }
             }
         }
@@ -74,15 +74,15 @@ async function syncSonarrPlexLists(url, apiKey) {
 async function syncRadarrPlexLists() {
     try {
         const importLists = await getImportLists(radarrURL, radarrAPIKey);
-        console.log(importLists);
+        // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
             if (importList.listType == 'plex') {
                 importList.enabled = !importList.enabled;
-                await resaveImportList(url, apiKey, importList);
+                await resaveImportList(radarrURL, radarrAPIKey, importList);
                 if (!importList.enabled) {
                     importList.enabled = true;
-                    await resaveImportList(importList);
+                    await resaveImportList(radarrURL, radarrAPIKey, importList);
                 }
             }
         }
