@@ -57,7 +57,7 @@ async function syncSonarrPlexLists() {
         for (const importList of importLists) {
             // Resave each import list
             if (importList.listType == 'plex') {
-                importList.enableAutomaticAdd = !importList.enableAutomaticAdd
+                importList.enableAutomaticAdd = !importList.enableAutomaticAdd;
                 await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
                 if (!importList.enableAutomaticAdd) {
                     importList.enableAutomaticAdd = true

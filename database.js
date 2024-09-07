@@ -34,6 +34,11 @@ const removeFeed = (id) => {
             if (err) reject(err);
             resolve(this.changes);
         });
+        // Remove items associated with the feed
+        db.run("DELETE FROM feed_items WHERE feed_id = ?", [id], function (err) {
+            if (err) reject(err);
+            resolve(this.changes);
+        });
     });
 };
 
