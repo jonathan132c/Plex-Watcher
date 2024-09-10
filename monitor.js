@@ -56,7 +56,7 @@ async function syncSonarrPlexLists() {
         // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
-            if (importList.listType == 'plex') {
+            if (importList.listType == 'plex' && importList.enableAutomaticAdd) {
                 importList.enableAutomaticAdd = !importList.enableAutomaticAdd;
                 await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
                 if (!importList.enableAutomaticAdd) {
@@ -77,7 +77,7 @@ async function syncRadarrPlexLists() {
         // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
-            if (importList.listType == 'plex') {
+            if (importList.listType == 'plex' && importList.enabled) {
                 importList.enabled = !importList.enabled;
                 await resaveImportList(radarrURL, radarrAPIKey, importList);
                 if (!importList.enabled) {
