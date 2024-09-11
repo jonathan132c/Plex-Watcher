@@ -49,11 +49,10 @@ async function resaveImportList(url, apiKey, importList) {
     }
 }
 
-// Main function to get and resave all import lists
+// Main function to get and resave sonarr import lists
 async function syncSonarrPlexLists() {
     try {
         const importLists = await getImportLists(sonarrUrl, sonarrAPIKey);
-        // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
             if (importList.listType == 'plex' && importList.enableAutomaticAdd) {
@@ -71,10 +70,10 @@ async function syncSonarrPlexLists() {
     }
 }
 
+// Main function to get and resave radarr import lists
 async function syncRadarrPlexLists() {
     try {
         const importLists = await getImportLists(radarrURL, radarrAPIKey);
-        // console.log(importLists);
         for (const importList of importLists) {
             // Resave each import list
             if (importList.listType == 'plex' && importList.enabled) {
