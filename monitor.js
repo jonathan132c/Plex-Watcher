@@ -19,99 +19,211 @@ async function getImportLists(url, apiKey) {
         const response = await axios.get(endpoint, {
             headers: {
                 'X-Api-Key': apiKey,
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+            },
         });
         return response.data;
     } catch (error) {
-        console.error('Error getting import lists:', error.response ? error.response.data : error.message);
+        console.error('Error getting import lists:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+async function getMovies() {
+    const endpoint = `${radarrURL}/api/v3/movie`;
+    try {
+        const response = await axios.get(endpoint, {
+            headers: {
+                'X-Api-Key': radarrAPIKey,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting import lists:', error.response?.data || error.message);
+        throw error;
+    }
+}
+
+async function getSeries() {
+    const endpoint = `${sonarrUrl}/api/v3/series`;
+    try {
+        const response = await axios.get(endpoint, {
+            headers: {
+                'X-Api-Key': sonarrAPIKey,
+                'Content-Type': 'application/json',
+            },
+        });
+        return response.data;
+    } catch (error) {
+        console.error('Error getting import lists:', error.response?.data || error.message);
         throw error;
     }
 }
 
 // Function to resave an import list
 async function resaveImportList(url, apiKey, importList) {
-    const importListId = importList.id;
-    const endpoint = `${url}/api/v3/importlist`;
-    const putEndpoint = `${endpoint}/${importListId}`;
+    const endpoint = `${url}/api/v3/importlist/${importList.id}`;
     try {
-        const response = await axios.put(putEndpoint, importList, {
+        await axios.put(endpoint, importList, {
             headers: {
                 'X-Api-Key': apiKey,
-                'Content-Type': 'application/json'
-            }
+                'Content-Type': 'application/json',
+            },
         });
-        console.log(`Resaved import list with ID: ${importListId}`);
-        return response.data;
     } catch (error) {
-        console.error(`Error resaving import list with ID ${importListId}:`, error.response ? error.response.data : error.message);
+        console.error(`Error resaving import list with ID ${importList.id}:`, error.response?.data || error.message);
         throw error;
     }
 }
 
-// Main function to get and resave sonarr import lists
-async function syncSonarrPlexLists() {
+// Sync and resave Sonarr import lists
+async function refreshSonarrPlexImportLists(importLists) {
     try {
-        const importLists = await getImportLists(sonarrUrl, sonarrAPIKey);
         for (const importList of importLists) {
-            // Resave each import list
-            if (importList.listType == 'plex' && importList.enableAutomaticAdd) {
+            if (importList.listType === 'plex' && importList.enableAutomaticAdd) {
                 importList.enableAutomaticAdd = !importList.enableAutomaticAdd;
                 await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
+
                 if (!importList.enableAutomaticAdd) {
-                    importList.enableAutomaticAdd = true
+                    importList.enableAutomaticAdd = true;
                     await resaveImportList(sonarrUrl, sonarrAPIKey, importList);
+                    console.log('Sonarr ')
                 }
             }
         }
-        console.log('All import lists have been resaved.');
     } catch (error) {
-        console.error('Failed to resave all import lists:', error.message);
+        console.error('Failed to resave all Sonarr import lists:', error.message);
     }
 }
 
-// Main function to get and resave radarr import lists
-async function syncRadarrPlexLists() {
+// Sync and resave Radarr import lists
+async function refreshRadarrPlexImportLists(importLists) {
     try {
-        const importLists = await getImportLists(radarrURL, radarrAPIKey);
         for (const importList of importLists) {
-            // Resave each import list
-            if (importList.listType == 'plex' && importList.enabled) {
+            if (importList.listType === 'plex' && importList.enabled) {
                 importList.enabled = !importList.enabled;
                 await resaveImportList(radarrURL, radarrAPIKey, importList);
+
                 if (!importList.enabled) {
                     importList.enabled = true;
                     await resaveImportList(radarrURL, radarrAPIKey, importList);
                 }
             }
         }
-        console.log('All import lists have been resaved.');
     } catch (error) {
-        console.error('Failed to resave all import lists:', error.message);
+        console.error('Failed to resave all Radarr import lists:', error.message);
     }
 }
 
-const monitorFeeds = async () => {
-    const feeds = await db.getFeeds();
-    for (var i = 0, l = feeds.length; i < l; i++) {
-        let feed = feeds[i];
-        const feedData = await parser.parseURL(feed.url);
-        const existingItems = await db.getFeedItems(feed.id);
-        const existingLinks = existingItems.map(item => item.link);
-        const newItems = feedData.items.filter(item => !existingLinks.includes(item.link));
-        if (newItems.length > 0) {
-            await db.addFeedItems(feed.id, newItems);
-            console.log(`New items found for feed: ${feed.name}`);
-            console.log(newItems);
-            await syncSonarrPlexLists();
-            await syncRadarrPlexLists();
+// Monitor RSS feeds for new items
+const radarrImportListSync = async () => {
+    console.log("syncing radarr");
+    const radarrMovies = await getMovies();
+    const radarrImdbIds = radarrMovies.map(movie => movie.imdbId);
+
+    const importLists = await getImportLists(radarrURL, radarrAPIKey);
+    const plexWatchlists = await getPlexWatchLists(importLists);
+
+    for (const plexWatchlist of plexWatchlists) {
+        const watchlistMovies = plexWatchlist.items.filter(item => item.categories.includes('movie'));
+        const watchlistImdbIds = watchlistMovies.map(item => item.guid.replace('imdb://', ''));
+        const unsyncedImdbIds = watchlistImdbIds.filter(id => !radarrImdbIds.includes(id));
+
+        if (unsyncedImdbIds.length > 0) {
+            await refreshRadarrPlexImportLists(importLists);
         }
+    }
+}
+
+// Monitor RSS feeds for new items
+const sonarrImportListSync = async () => {
+    console.log("syncing sonarr");
+    const sonarrSeries = await getSeries();
+    const sonarrTvdbIds = sonarrSeries.map(serie => serie.tvdbId);
+
+    const importLists = await getImportLists(sonarrUrl, sonarrAPIKey);
+    const plexWatchlists = await getPlexWatchLists(importLists);
+
+    for (const plexWatchlist of plexWatchlists) {
+        const watchlistSeries = plexWatchlist.items.filter(item => item.categories.includes('show'));
+        const watchlistTvdbIds = watchlistSeries.map(item => item.guid.replace('tvdb://', ''));
+        const newImdbIds = watchlistTvdbIds.filter(tvdbId => !sonarrTvdbIds.includes(tvdbId));
+
+        if (newImdbIds.length > 0) {
+            await refreshSonarrPlexImportLists(importLists);
+        }
+    }
+}
+
+const getPlexWatchLists = async (importLists) => {
+    const plexWatchlist = [];
+    for (const importList of importLists) {
+        if (importList.listType === 'plex') {
+            const urlField = importList.fields.find(field => field.name === 'url');
+            if (urlField) {
+                plexWatchlist.push(await parser.parseURL(urlField.value));
+            }
+        }
+    }
+    return plexWatchlist
+}
+
+const monitorFeeds = async () => {
+    try {
+        await sonarrImportListSync();
+        await radarrImportListSync();
+        // await radarrImportListSync();
+        // const movies = await getMovies();
+        // const series = await getSeries();
+        // console.log(series)
+        // const importLists = await getImportLists(radarrURL, radarrAPIKey);
+
+        // const watchlistUrls = [];
+
+        // for (const importList of importLists) {
+        //     if (importList.listType === 'plex') {
+        //         const urlField = importList.fields.find(field => field.label === 'Url');
+        //         if (urlField) {
+        //             watchlistUrls.push(urlField.value);
+        //         }
+        //     }
+        // }
+
+        // for (const watchlistUrl of watchlistUrls) {
+        //     const watchlist = await parser.parseURL(watchlistUrl);
+        //     const watchlistMovieImdbIds = watchlist.items.filter(item => item.guid.includes('imdb://')).map(item => item.guid.replace('imdb://', ''));
+        //     const radarrMovieImdbIds = movies.map(movie => movie.imdbId);
+        //     const newMovieImdbIds = watchlistMovieImdbIds.filter(id => !radarrMovieImdbIds.includes(id));
+            
+        //     if (newMovieImdbIds.length > 0 || watchlistMovieImdbIds < radarrMovieImdbIds) {
+        //         console.log("syncing radarr");
+        //         await syncRadarrPlexLists();
+        //     }
+
+        //     const watchlistMSeriesTvdbIds = watchlist.items.filter(item => item.guid.includes('tvdb://')).map(item => item.guid.replace('tvdb://', ''));
+        //     console.log(watchlistMSeriesTvdbIds);
+        //     const sonarrSeriesTvdbIds = series.map(serie => serie.tvdbId);
+        //     console.log(sonarrSeriesTvdbIds);
+        //     const newSeriesImdbIds = watchlistMSeriesTvdbIds.filter(id => !sonarrSeriesTvdbIds.includes(id));
+
+        //     if (newSeriesImdbIds.length > 0 || watchlistMSeriesTvdbIds < sonarrSeriesTvdbIds) {
+        //         console.log("syncing sonarr");
+        //         await syncRadarrPlexLists();
+        //     }
+
+        //     // const watchlistSeries
+        // }
+    } catch (error) {
+        console.error('Error monitoring feeds:', error.message);
     }
 };
 
+// Schedule task to check for new RSS feed items every minute
 cron.schedule('* * * * *', () => {
     console.log('Checking for new RSS feed items...');
     monitorFeeds();
 });
 
-monitorFeeds();  // Initial run when the script starts
+// Initial run when the script starts
+monitorFeeds();
