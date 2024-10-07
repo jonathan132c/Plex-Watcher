@@ -1,17 +1,14 @@
 const axios = require('axios');
 require('dotenv').config();
 
-const url = process.env.SONARR_API_URL;
-const apiKey = process.env.SONARR_API_KEY;
-
 // Function to get all import lists
 
 async function getImportLists() {
-    const endpoint = `${url}/api/v3/importlist`;
+    const endpoint = `${process.env.SONARR_API_URL}/api/v3/importlist`;
     try {
         const response = await axios.get(endpoint, {
             headers: {
-                'X-Api-Key': apiKey,
+                'X-Api-Key': process.env.SONARR_API_KEY,
                 'Content-Type': 'application/json',
             },
         });
@@ -24,11 +21,11 @@ async function getImportLists() {
 
 // Function to resave an import list
 async function putImportList(importList) {
-    const endpoint = `${url}/api/v3/importlist/${importList.id}`;
+    const endpoint = `${process.env.SONARR_API_URL}/api/v3/importlist/${importList.id}`;
     try {
         await axios.put(endpoint, importList, {
             headers: {
-                'X-Api-Key': apiKey,
+                'X-Api-Key': process.env.SONARR_API_KEY,
                 'Content-Type': 'application/json',
             },
         });
@@ -39,11 +36,11 @@ async function putImportList(importList) {
 }
 
 async function getSeries() {
-    const endpoint = `${url}/api/v3/series`;
+    const endpoint = `${process.env.SONARR_API_URL}/api/v3/series`;
     try {
         const response = await axios.get(endpoint, {
             headers: {
-                'X-Api-Key': apiKey,
+                'X-Api-Key': process.env.SONARR_API_KEY,
                 'Content-Type': 'application/json',
             },
         });

@@ -1,15 +1,12 @@
 const cron = require('node-cron');
 const RSSParser = require('rss-parser');
-const db = require('./database');
-const axios = require('axios');
 const sonarr = require('./services/sonarr');
 const radarr = require('./services/radarr');
-
 require('dotenv').config();
 
 const parser = new RSSParser();
 
-// Sync and resave Sonarr import lists
+// Refresh Sonarr import lists
 async function refreshSonarrPlexImportLists(importLists) {
     try {
         for (const importList of importLists) {
@@ -20,16 +17,15 @@ async function refreshSonarrPlexImportLists(importLists) {
                 if (!importList.enableAutomaticAdd) {
                     importList.enableAutomaticAdd = true;
                     await sonarr.putImportList(importList);
-                    console.log('Sonarr ')
                 }
             }
         }
     } catch (error) {
-        console.error('Failed to resave all Sonarr import lists:', error.message);
+        console.error('Failed to resave Sonarr import lists:', error.message);
     }
 }
 
-// Sync and resave Radarr import lists
+// Refresh Radarr import lists
 async function refreshRadarrPlexImportLists(importLists) {
     try {
         for (const importList of importLists) {
@@ -44,116 +40,91 @@ async function refreshRadarrPlexImportLists(importLists) {
             }
         }
     } catch (error) {
-        console.error('Failed to resave all Radarr import lists:', error.message);
+        console.error('Failed to resave Radarr import lists:', error.message);
     }
 }
 
-// Monitor RSS feeds for new items
-const radarrImportListSync = async () => {
-    console.log("syncing radarr");
-    const radarrMovies = await radarr.getMovies();
-    const radarrImdbIds = radarrMovies.map(movie => movie.imdbId);
+// Sync Radarr import lists with Plex watchlists
+async function radarrImportListSync() {
+    try {
+        const radarrMovies = await radarr.getMovies();
+        const radarrImdbIds = radarrMovies.map(movie => movie.imdbId);
 
-    const importLists = await radarr.getImportLists();
-    const plexWatchlists = await getPlexWatchLists(importLists);
+        const importLists = await radarr.getImportLists();
+        const plexWatchlists = await getPlexWatchLists(importLists);
 
-    for (const plexWatchlist of plexWatchlists) {
-        const watchlistMovies = plexWatchlist.items.filter(item => item.categories.includes('movie'));
-        const watchlistImdbIds = watchlistMovies.map(item => item.guid.replace('imdb://', ''));
-        const unsyncedImdbIds = watchlistImdbIds.filter(id => !radarrImdbIds.includes(id));
+        for (const plexWatchlist of plexWatchlists) {
+            const watchlistMovies = plexWatchlist.items.filter(item => item.categories.includes('movie'));
+            const watchlistImdbIds = watchlistMovies.map(item => item.guid.replace('imdb://', ''));
+            const unsyncedImdbIds = watchlistImdbIds.filter(id => !radarrImdbIds.includes(id));
 
-        if (unsyncedImdbIds.length > 0) {
-            await refreshRadarrPlexImportLists(importLists);
+            if (unsyncedImdbIds.length > 0) {
+                console.log(`[${Date.now()}][RADARR] Updating Plex Watchlist: ${plexWatchlist.description}`);
+                await refreshRadarrPlexImportLists(importLists);
+            }
         }
+    } catch (error) {
+        console.error(`[${Date.now()}][RADARR] Error syncing import lists: ${error.message}`);
     }
 }
 
-// Monitor RSS feeds for new items
+// Sync Sonarr import lists with Plex watchlists
 async function sonarrImportListSync() {
-    console.log("syncing sonarr");
-    const sonarrSeries = await sonarr.getSeries();
-    const sonarrTvdbIds = sonarrSeries.map(serie => serie.tvdbId);
+    try {
+        const sonarrSeries = await sonarr.getSeries();
+        const sonarrTvdbIds = sonarrSeries.map(serie => serie.tvdbId);
 
-    const importLists = await sonarr.getImportLists();
-    const plexWatchlists = await getPlexWatchLists(importLists);
+        const importLists = await sonarr.getImportLists();
+        const plexWatchlists = await getPlexWatchLists(importLists);
 
-    for (const plexWatchlist of plexWatchlists) {
-        const watchlistSeries = plexWatchlist.items.filter(item => item.categories.includes('show'));
-        const watchlistTvdbIds = watchlistSeries.map(item => item.guid.replace('tvdb://', ''));
-        const newImdbIds = watchlistTvdbIds.filter(tvdbId => !sonarrTvdbIds.includes(tvdbId));
+        for (const plexWatchlist of plexWatchlists) {
+            const watchlistSeries = plexWatchlist.items.filter(item => item.categories.includes('show'));
+            const watchlistTvdbIds = watchlistSeries.map(item => Number(item.guid.replace('tvdb://', '')));
+            const newTvdbIds = watchlistTvdbIds.filter(tvdbId => !sonarrTvdbIds.includes(tvdbId));
 
-        if (newImdbIds.length > 0) {
-            await refreshSonarrPlexImportLists(importLists);
+            if (newTvdbIds.length > 0) {
+                console.log(`[${Date.now()}][SONARR] Updating Plex Watchlist: ${plexWatchlist.description}`);
+                await refreshSonarrPlexImportLists(importLists);
+            }
         }
+    } catch (error) {
+        console.error(`[${Date.now()}][SONARR] Error syncing import lists: ${error.message}`);
     }
 }
 
-const getPlexWatchLists = async (importLists) => {
+// Get Plex watchlists from the import lists
+async function getPlexWatchLists(importLists) {
     const plexWatchlists = [];
     for (const importList of importLists) {
         if (importList.listType === 'plex') {
             const urlField = importList.fields.find(field => field.name === 'url');
             if (urlField) {
-                plexWatchlists.push(await parser.parseURL(urlField.value));
+                const watchlist = await parser.parseURL(urlField.value);
+                plexWatchlists.push(watchlist);
             }
         }
     }
-    return plexWatchlists
+    return plexWatchlists;
 }
 
-const monitorFeeds = async () => {
+// Main monitor function to sync Sonarr and Radarr import lists
+async function monitorFeeds() {
     try {
-        await sonarrImportListSync();
-        await radarrImportListSync();
-        // await radarrImportListSync();
-        // const movies = await getMovies();
-        // const series = await getSeries();
-        // console.log(series)
-        // const importLists = await getImportLists(radarrURL, radarrAPIKey);
-
-        // const watchlistUrls = [];
-
-        // for (const importList of importLists) {
-        //     if (importList.listType === 'plex') {
-        //         const urlField = importList.fields.find(field => field.label === 'Url');
-        //         if (urlField) {
-        //             watchlistUrls.push(urlField.value);
-        //         }
-        //     }
-        // }
-
-        // for (const watchlistUrl of watchlistUrls) {
-        //     const watchlist = await parser.parseURL(watchlistUrl);
-        //     const watchlistMovieImdbIds = watchlist.items.filter(item => item.guid.includes('imdb://')).map(item => item.guid.replace('imdb://', ''));
-        //     const radarrMovieImdbIds = movies.map(movie => movie.imdbId);
-        //     const newMovieImdbIds = watchlistMovieImdbIds.filter(id => !radarrMovieImdbIds.includes(id));
-            
-        //     if (newMovieImdbIds.length > 0 || watchlistMovieImdbIds < radarrMovieImdbIds) {
-        //         console.log("syncing radarr");
-        //         await syncRadarrPlexLists();
-        //     }
-
-        //     const watchlistMSeriesTvdbIds = watchlist.items.filter(item => item.guid.includes('tvdb://')).map(item => item.guid.replace('tvdb://', ''));
-        //     console.log(watchlistMSeriesTvdbIds);
-        //     const sonarrSeriesTvdbIds = series.map(serie => serie.tvdbId);
-        //     console.log(sonarrSeriesTvdbIds);
-        //     const newSeriesImdbIds = watchlistMSeriesTvdbIds.filter(id => !sonarrSeriesTvdbIds.includes(id));
-
-        //     if (newSeriesImdbIds.length > 0 || watchlistMSeriesTvdbIds < sonarrSeriesTvdbIds) {
-        //         console.log("syncing sonarr");
-        //         await syncRadarrPlexLists();
-        //     }
-
-        //     // const watchlistSeries
-        // }
+        await sonarrImportListSync()
     } catch (error) {
-        console.error('Error monitoring feeds:', error.message);
+        console.error(`[${Date.now()}][SONARR] Error monitoring feed: ${error.message}`);
     }
-};
 
-// Schedule task to check for new RSS feed items every minute
+    try {
+        await radarrImportListSync();
+    } catch (error) {
+        console.error(`[${Date.now()}][RADARR] Error monitoring feed: ${error.message}`);
+    }
+}
+
+// Schedule the monitoring task to run every minute
 cron.schedule('* * * * *', () => {
-    console.log('Checking for new RSS feed items...');
+    // console.log('Checking for new items in Plex watchlists...');
     monitorFeeds();
 });
 

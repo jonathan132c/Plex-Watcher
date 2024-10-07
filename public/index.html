@@ -3,17 +3,26 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Plex Watchlist RSS Feed Manager</title>
+    <title>Setup</title>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
-    <h1>Plex Watchlist RSS Feed Manager</h1>
-    <form id="feed-form">
-        <input type="text" id="feed-name" placeholder="Enter RSS Feed Name" required>
-        <input type="url" id="feed-url" placeholder="Enter RSS Feed URL" required>
-        <button type="submit">Add Feed</button>
+    <h1>Settings</h1>
+    <form id="form" onsubmit="window.location.reload();">
+        <div>
+            <label for="radarr">Radarr</label>
+            <input type="url" id="sonarr-api-url" placeholder="Enter sonarr base url" required>
+            <input type="text" id="sonarr-api-key" placeholder="Enter api key" required>
+        </div>
+        <div>
+            <label for="sonarr">Sonarr</label>
+            <input type="url" id="radarr-api-url" placeholder="Enter radar base url" required>
+            <input type="text" id="radarr-api-key" placeholder="Enter api key" required>
+        </div>
+        <div>
+            <button type="submit">Save</button>
+        </div>
     </form>
-    <ul id="feed-list"></ul>
     <script src="script.js"></script>
 </body>
 </html>
