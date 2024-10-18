@@ -60,6 +60,90 @@ class SonarrService {
             throw error;
         }
     }
+
+    async putSeries(seriesId, updatedSeriesData) {
+        const { sonarrApiUrl, sonarrApiKey } = await this.getConfig();
+        try {
+            const response = await axios.put(`${sonarrApiUrl}/api/v3/series/${seriesId}`, updatedSeriesData, {
+                headers: {
+                    'X-Api-Key': sonarrApiKey || process.env.SONARR_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+            });
+            return response.data; // Returns the updated series data
+        } catch (error) {
+            console.error('Error updating series in Sonarr:', error);
+            throw new Error('Failed to update series in Sonarr');
+        }
+    }
+
+    async deleteSeries(seriesId) {
+        const { sonarrApiUrl, sonarrApiKey } = await this.getConfig();
+
+        try {
+            const response = await axios.delete(`${sonarrApiUrl}/api/v3/series/${seriesId}`, {
+                headers: {
+                    'X-Api-Key': sonarrApiKey || process.env.SONARR_API_KEY,
+                    'Content-Type': 'application/json',
+                },
+            });
+            return response.data; // Returns confirmation of deletion
+        } catch (error) {
+            console.error('Error deleting series from Sonarr:', error);
+            throw new Error('Failed to delete series from Sonarr');
+        }
+    }
+
+    async getTags() {
+        const { sonarrApiUrl, sonarrApiKey } = await this.getConfig();
+        try {
+            const response = await axios.get(`${sonarrApiUrl}/api/v3/tag`, {
+                headers: {
+                    'X-Api-Key': sonarrApiKey || process.env.SONARR_API_KEY,
+                    'Content-Type': 'application/json',
+                }
+            });
+            return response.data; // Returns an array of tags
+        } catch (error) {
+            console.error('Error fetching tags from Sonarr:', error);
+            throw error;
+        }
+    }
+
+    async putTag(tagId, label) {
+        const { sonarrApiUrl, sonarrApiKey } = await this.getConfig();
+        const url = tagId ? `${sonarrApiUrl}/api/v3/tag/${tagId}` : `${sonarrApiUrl}/api/v3/tag`;
+        try {
+            const response = await axios.put(url, { label }, {
+                headers: {
+                    'X-Api-Key': sonarrApiKey || process.env.SONARR_API_KEY,
+                    'Content-Type': 'application/json',
+                }
+            });
+            return response.data; // Returns the updated or newly created tag data
+        } catch (error) {
+            console.error('Error updating tag in Sonarr:', error);
+            throw error;
+        }
+    }
+
+    async postTag(label) {
+        const { sonarrApiUrl, sonarrApiKey } = await this.getConfig();
+        const url = `${sonarrApiUrl}/api/v3/tag`;
+
+        try {
+            const response = await axios.post(url, { label }, {
+                headers: {
+                    'X-Api-Key': sonarrApiKey || process.env.SONARR_API_KEY,
+                    'Content-Type': 'application/json',
+                }
+            });
+            return response.data; // Returns the newly created tag data
+        } catch (error) {
+            console.error('Error creating tag in Sonarr:', error);
+            throw new Error('Failed to create tag in Sonarr');
+        }
+    }
 }
 
 module.exports = new SonarrService();
